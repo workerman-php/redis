@@ -325,6 +325,9 @@ class Client
         $context = isset($this->_options['context']) ? $this->_options['context'] : [];
         $this->_connection = new AsyncTcpConnection($this->_address, $context);
         $this->_connection->protocol = Redis::class;
+        if (str_starts_with(strtolower($this->_address), 'unix://')) {
+            $this->_connection->transport = 'unix';
+        }
         if(!empty($this->_options['ssl'])){
             $this->_connection->transport = 'ssl';
         }
