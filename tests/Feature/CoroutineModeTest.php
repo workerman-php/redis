@@ -186,7 +186,10 @@ PHP
 PHP
         );
 
-        $this->assertFalse($result['auth']);
+        // No password is configured in CI. Redis rejects AUTH and the reply is
+        // false; Dragonfly accepts it and the reply is true. Either value shows
+        // the coroutine path returned the reply instead of null.
+        $this->assertIsBool($result['auth']);
         $this->assertTrue($result['select']);
         $this->assertSame(1, $result['db']);
         $this->assertTrue($result['set']);
