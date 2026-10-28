@@ -245,6 +245,32 @@ final class ClientShapingTier9Test extends \Tests\TestCase
         $this->assertSame($cb, t9Cb($client));
     }
 
+    public function test_xread_places_stream_names_before_their_ids(): void
+    {
+        $client = t9Client();
+        $client->xRead(['a' => '0', 'b' => '$'], 2, 0);
+
+        $this->assertSame(['XREAD', 'COUNT', 2, 'BLOCK', 0, 'STREAMS', 'a', 'b', '0', '$'], t9WireArgs($client));
+    }
+
+    public function test_xread_keeps_a_raw_token_list_and_a_trailing_callback(): void
+    {
+        $client = t9Client();
+        $cb = function () {};
+        $client->xRead(['COUNT', 10, 'STREAMS', 's', '0'], $cb);
+
+        $this->assertSame(['XREAD', 'COUNT', 10, 'STREAMS', 's', '0'], t9WireArgs($client));
+        $this->assertSame($cb, t9Cb($client));
+    }
+
+    public function test_xreadgroup_places_the_group_before_streams(): void
+    {
+        $client = t9Client();
+        $client->xReadGroup('g', 'c', ['s' => '>'], 1);
+
+        $this->assertSame(['XREADGROUP', 'GROUP', 'g', 'c', 'COUNT', 1, 'STREAMS', 's', '>'], t9WireArgs($client));
+    }
+
     // -----------------------------------------------------------------------
     // hMGet() / hGetAll() formatter early-return guards (non-array passthrough)
     // -----------------------------------------------------------------------

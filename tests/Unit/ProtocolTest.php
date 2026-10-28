@@ -179,8 +179,10 @@ final class ProtocolTest extends \Tests\TestCase
 
         $len = Redis::input($truncated, protocolStubConnection());
 
-        // 0 means "need more data" — do not advance the read pointer.
-        $this->assertSame(0, $len);
+        // The last bulk header already says 3 bytes, so the full frame size is
+        // known even though "ar\r\n" has not arrived yet.
+        $full = "*2\r\n\$1\r\n0\r\n*2\r\n\$3\r\nfoo\r\n\$3\r\nbar\r\n";
+        $this->assertSame(\strlen($full), $len);
     }
 
     /*
@@ -250,13 +252,19 @@ final class ProtocolTest extends \Tests\TestCase
     public function test_input_returns_0_when_the_first_line_has_no_crlf_yet(): void
     {
         // measure() finds no "\r\n" and returns 0 (need more bytes).
-        $this->assertSame(0, Redis::input("\$5\r\nhel", protocolStubConnection()));
+        $this->assertSame(0, Redis::input('$5', protocolStubConnection()));
     }
 
-    public function test_input_returns_0_for_a_bulk_frame_whose_payload_is_not_fully_buffered(): void
+    public function test_input_reports_a_bulk_frame_length_from_its_header_before_the_payload_arrives(): void
     {
-        // Header says 5 bytes but only 3 of "hello" are present.
-        $this->assertSame(0, Redis::input("\$5\r\nhel", protocolStubConnection()));
+        // '$5\r\nhello\r\n' is 11 bytes. Only 3 payload bytes are buffered, but
+        // the length is already known, so a too-large bulk can be rejected now.
+        $this->assertSame(11, Redis::input("\$5\r\nhel", protocolStubConnection()));
+        $this->assertSame(11, Redis::input("\$5\r\nhello\r\n+OK\r\n", protocolStubConnection()));
+        $this->assertSame(0, Redis::input("\$-10\r\n", protocolStubConnection()));
+        $this->assertSame(0, Redis::input("*-10\r\n", protocolStubConnection()));
+        // A later sibling's size is still unknown, so the array length is not.
+        $this->assertSame(0, Redis::input("*2\r\n\$5\r\nhel", protocolStubConnection()));
     }
 
     public function test_input_returns_0_when_a_multi_bulk_element_header_has_no_crlf(): void

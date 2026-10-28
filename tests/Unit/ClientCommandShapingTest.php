@@ -246,8 +246,11 @@ final class ClientCommandShapingTest extends \Tests\TestCase
 
         $queue = shapingQueue($client);
         $this->assertSame(['SELECT', 3], $queue[0][0]);
-        // select() supplies a default no-op callback when none is given.
-        $this->assertIsCallable($queue[0][1]);
+        // No dummy callback: coroutine mode must be able to suspend. The
+        // formatter still records the selected DB when the reply arrives.
+        $this->assertNull($queue[0][1]);
+        $raw = shapingProp($client, '_queue');
+        $this->assertIsCallable($raw[0][3]);
     }
 
     public function test_auth_shapes_an_auth_command_with_a_single_password(): void

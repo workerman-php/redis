@@ -75,20 +75,25 @@ class Redis
             case '-':
                 return $eol + 2 - $offset;
             case '$':
-                if ($offset === \strpos($buffer, '$-1', $offset)) {
+                if (\substr($buffer, $offset, 5) === "$-1\r\n") {
                     return 5;
                 }
                 $length = (int)\substr($buffer, $offset + 1, $eol - $offset - 1);
-                $end = $eol + 2 + $length + 2;
-                if (\strlen($buffer) < $end) {
+                if ($length < 0) {
                     return 0;
                 }
-                return $end - $offset;
+                // The header already fixes the frame size. Report it before the
+                // body arrives so the connection can reject an oversized bulk
+                // instead of buffering the payload first.
+                return $eol + 2 + $length + 2 - $offset;
             case '*':
-                if ($offset === \strpos($buffer, '*-1', $offset)) {
+                if (\substr($buffer, $offset, 5) === "*-1\r\n") {
                     return 5;
                 }
                 $count = (int)\substr($buffer, $offset + 1, $eol - $offset - 1);
+                if ($count < 0) {
+                    return 0;
+                }
                 $cursor = $eol + 2;
                 while ($count-- > 0) {
                     $childLen = self::measure($buffer, $cursor, $depth + 1);
@@ -183,7 +188,7 @@ class Redis
                 $offset = $eol + 2;
                 return [$type, $value];
             case '$':
-                if ($offset === \strpos($buffer, '$-1', $offset)) {
+                if (\substr($buffer, $offset, 5) === "$-1\r\n") {
                     $offset += 5;
                     return [$type, null];
                 }
@@ -192,7 +197,7 @@ class Redis
                 $offset = $eol + 2 + $length + 2;
                 return [$type, $value];
             case '*':
-                if ($offset === \strpos($buffer, '*-1', $offset)) {
+                if (\substr($buffer, $offset, 5) === "*-1\r\n") {
                     $offset += 5;
                     return [$type, null];
                 }

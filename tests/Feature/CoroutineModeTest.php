@@ -153,4 +153,46 @@ PHP
         $this->assertSame(\Workerman\Redis\Exception::class, $result['class']);
         $this->assertStringContainsString('subscribe/monitor mode', $result['message']);
     }
+
+    public function test_select_auth_and_quit_return_their_replies_in_coroutine_mode(): void
+    {
+        if (!coroutineSupported()) {
+            $this->markTestSkipped('coroutine mode requires PHP 8.1+ and Revolt');
+        }
+
+        $result = runInCoroutineWorker(<<<'PHP'
+            $auth = $redis->auth('not-the-password');
+            $select = $redis->select(1);
+            $ref = new \ReflectionClass($redis);
+            $dbProp = $ref->getProperty('_db');
+            $dbProp->setAccessible(true);
+            $db = $dbProp->getValue($redis);
+            $set = $redis->set('pest:g8:coro:db', 'one');
+            $get = $redis->get('pest:g8:coro:db');
+            $redis->del('pest:g8:coro:db');
+            $back = $redis->select(0);
+            $missing = $redis->get('pest:g8:coro:db');
+            $quit = $redis->quit();
+            $emit([
+                'auth' => $auth,
+                'select' => $select,
+                'db' => $db,
+                'set' => $set,
+                'get' => $get,
+                'back' => $back,
+                'missing' => $missing,
+                'quit' => $quit,
+            ]);
+PHP
+        );
+
+        $this->assertFalse($result['auth']);
+        $this->assertTrue($result['select']);
+        $this->assertSame(1, $result['db']);
+        $this->assertTrue($result['set']);
+        $this->assertSame('one', $result['get']);
+        $this->assertTrue($result['back']);
+        $this->assertNull($result['missing']);
+        $this->assertTrue($result['quit']);
+    }
 }

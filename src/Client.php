@@ -470,7 +470,7 @@ class Client
             reset($this->_queue);
             $current_queue = current($this->_queue);
             $current_command = $current_queue[0][0];
-            if (\in_array($current_command, self::BLOCKING_COMMANDS, true)) {
+            if (\in_array($current_command, self::BLOCKING_COMMANDS, true) || self::holdsForBlock($current_queue[0])) {
                 // A blocking command at the head legitimately holds the
                 // connection until it returns (or hits its own server-side
                 // timeout); everything queued behind it is waiting on that
@@ -500,6 +500,78 @@ class Client
                 $this->connect();
             }
         });
+    }
+
+    /**
+     * XREAD / XREADGROUP block only when the queued command carries BLOCK.
+     * The token always sits before STREAMS, so a stream id of "BLOCK" does not count.
+     *
+     * @param array $args
+     * @return bool
+     */
+    protected static function holdsForBlock(array $args)
+    {
+        $name = $args[0] ?? '';
+        if ($name !== 'XREAD' && $name !== 'XREADGROUP') {
+            return false;
+        }
+        foreach ($args as $arg) {
+            if (!\is_string($arg)) {
+                continue;
+            }
+            if (\strcasecmp($arg, 'STREAMS') === 0) {
+                return false;
+            }
+            if (\strcasecmp($arg, 'BLOCK') === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @param string $command
+     * @param array  $prefix
+     * @param array  $streams
+     * @param int    $count
+     * @param mixed  $block
+     * @return array
+     */
+    protected function streamReadArgs($command, array $prefix, $streams, $count, $block)
+    {
+        if (!\is_array($streams) || $streams === []) {
+            throw new \InvalidArgumentException($command . ' requires at least one stream');
+        }
+        $args = \array_merge([$command], $prefix);
+        if ($count) {
+            $args[] = 'COUNT';
+            $args[] = $count;
+        }
+        if ($block !== null) {
+            $args[] = 'BLOCK';
+            $args[] = $block;
+        }
+        $i = 0;
+        $list = true;
+        foreach ($streams as $key => $unused) {
+            if ($key !== $i++) {
+                $list = false;
+                break;
+            }
+        }
+        if ($list) {
+            return \array_merge($args, $streams);
+        }
+        $args[] = 'STREAMS';
+        $ids = [];
+        foreach ($streams as $key => $id) {
+            $args[] = $key;
+            $ids[] = $id;
+        }
+        foreach ($ids as $id) {
+            $args[] = $id;
+        }
+        return $args;
     }
 
     /**
@@ -607,13 +679,15 @@ class Client
             } else {
                 $this->_error = $data[1];
             }
+            // format runs even when there is no user callback. select()/auth()
+            // rely on that to record _db/_auth; coroutine mode then suspends
+            // on a null callback instead of a dummy closure.
+            if (!empty($queue[3])) {
+                $result = \call_user_func($queue[3], $result);
+            }
             if (!$cb) {
                 $this->process();
                 return;
-            }
-            // format.
-            if (!empty($queue[3])) {
-                $result = \call_user_func($queue[3], $result);
             }
             try {
                 \call_user_func($cb, $result, $this);
@@ -1154,7 +1228,7 @@ class Client
             }
             return $result;
         };
-        return $this->queueCommand(['SELECT', $db], $cb ?: function () {}, $format);
+        return $this->queueCommand(['SELECT', $db], $cb, $format);
     }
 
     /**
@@ -1176,7 +1250,7 @@ class Client
             return $result;
         };
         $args = \is_array($auth) ? \array_merge(['AUTH'], $auth) : ['AUTH', $auth];
-        return $this->queueCommand($args, $cb ?: function () {}, $format);
+        return $this->queueCommand($args, $cb, $format);
     }
 
     /**
@@ -1484,6 +1558,56 @@ class Client
             $args[] = $value;
         }
         return $this->queueCommand($args, $cb);
+    }
+
+    /**
+     * XREAD. $streams is stream => id. A plain list is sent as raw tokens so
+     * XREAD COUNT n STREAMS key id still works.
+     *
+     * @param array          $streams
+     * @param int|callable   $count
+     * @param int|callable|null $block
+     * @param callable|null  $cb
+     * @return mixed
+     */
+    public function xRead($streams, $count = 0, $block = null, $cb = null)
+    {
+        if (\is_callable($count)) {
+            $cb = $count;
+            $count = 0;
+            $block = null;
+        } elseif (\is_callable($block)) {
+            $cb = $block;
+            $block = null;
+        }
+        return $this->queueCommand($this->streamReadArgs('XREAD', [], $streams, $count, $block), $cb);
+    }
+
+    /**
+     * XREADGROUP. $streams is stream => id.
+     *
+     * @param string         $group
+     * @param string         $consumer
+     * @param array          $streams
+     * @param int|callable   $count
+     * @param int|callable|null $block
+     * @param callable|null  $cb
+     * @return mixed
+     */
+    public function xReadGroup($group, $consumer, $streams, $count = 0, $block = null, $cb = null)
+    {
+        if (\is_callable($count)) {
+            $cb = $count;
+            $count = 0;
+            $block = null;
+        } elseif (\is_callable($block)) {
+            $cb = $block;
+            $block = null;
+        }
+        return $this->queueCommand(
+            $this->streamReadArgs('XREADGROUP', ['GROUP', $group, $consumer], $streams, $count, $block),
+            $cb
+        );
     }
 
     /**
@@ -1949,12 +2073,7 @@ class Client
     public function quit($cb = null)
     {
         $this->_quitting = true;
-        $userCb = $cb;
-        return $this->queueCommand(['QUIT'], function ($reply, $client) use ($userCb) {
-            if ($userCb !== null) {
-                \call_user_func($userCb, $reply, $client);
-            }
-        });
+        return $this->queueCommand(['QUIT'], $cb);
     }
 
     /**
