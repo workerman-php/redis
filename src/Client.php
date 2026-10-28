@@ -766,7 +766,7 @@ class Client
      */
     protected function queueCommand(array $args, $cb = null, $format = null)
     {
-        $need_suspend = !$cb && \class_exists(EventLoop::class, false);
+        $need_suspend = !$cb && $this->inCoroutineMode();
         if ($need_suspend && ($this->_subscribe || $this->_monitoring)) {
             // In coroutine mode an ordinary command would suspend the current
             // fiber until its reply arrives — but process() refuses to send
@@ -782,8 +782,9 @@ class Client
                 . 'Use a separate Client, or pass an explicit callback.'
             );
         }
+        $suspend = null;
         if ($need_suspend) {
-            [$suspension, $cb] = $this->suspenstion();
+            [$cb, $suspend] = $this->suspenstion();
         }
         if ($format === null) {
             $this->_queue[] = [$args, time(), $cb];
@@ -791,10 +792,26 @@ class Client
             $this->_queue[] = [$args, time(), $cb, $format];
         }
         $this->process();
-        if ($need_suspend) {
-            return $suspension->suspend();
+        if ($suspend) {
+            return $suspend();
         }
         return null;
+    }
+
+    /**
+     * True when a callback-less command should wait for the reply.
+     *
+     * The Fiber loop loads Revolt and suspends the current PHP fiber.
+     * The Swoole and Swow loops do not load Revolt; they suspend the
+     * native coroutine that Workerman is already running inside.
+     */
+    protected function inCoroutineMode(): bool
+    {
+        $loop = \class_exists(\Workerman\Worker::class, false) ? \Workerman\Worker::$eventLoopClass : null;
+        if ($loop === \Workerman\Events\Swoole::class || $loop === \Workerman\Events\Swow::class) {
+            return \class_exists(\Workerman\Coroutine::class) && \Workerman\Coroutine::isCoroutine();
+        }
+        return \class_exists(EventLoop::class, false);
     }
 
     /**
@@ -1813,11 +1830,26 @@ class Client
      */
     protected function suspenstion()
     {
+        $loop = \Workerman\Worker::$eventLoopClass;
+        if ($loop === \Workerman\Events\Swoole::class || $loop === \Workerman\Events\Swow::class) {
+            $box = new \stdClass();
+            $coroutine = \Workerman\Coroutine::getCurrent();
+            $cb = function ($result) use ($box, $coroutine) {
+                $box->value = $result;
+                $coroutine->resume();
+            };
+            return [$cb, static function () use ($box) {
+                \Workerman\Coroutine::suspend();
+                return $box->value;
+            }];
+        }
         $suspension = EventLoop::getSuspension();
         $cb = function ($result) use ($suspension) {
             $suspension->resume($result);
         };
-        return [$suspension, $cb];
+        return [$cb, function () use ($suspension) {
+            return $suspension->suspend();
+        }];
     }
 
     /**
@@ -3204,7 +3236,7 @@ class Client
         }
 
         // Coroutine mode: synchronous loop, return aggregated keys.
-        if (!$cb && \class_exists(EventLoop::class, false)) {
+        if (!$cb && $this->inCoroutineMode()) {
             $collected = [];
             $cursor = '0';
             do {
@@ -3335,7 +3367,7 @@ class Client
         }
 
         // Coroutine mode: synchronous loop, return aggregated fields.
-        if (!$cb && \class_exists(EventLoop::class, false)) {
+        if (!$cb && $this->inCoroutineMode()) {
             $collected = [];
             $cursor = '0';
             do {
@@ -3458,7 +3490,7 @@ class Client
         }
 
         // Coroutine mode: synchronous loop, return aggregated members.
-        if (!$cb && \class_exists(EventLoop::class, false)) {
+        if (!$cb && $this->inCoroutineMode()) {
             $collected = [];
             $cursor = '0';
             do {
@@ -3597,7 +3629,7 @@ class Client
         }
 
         // Coroutine mode: synchronous loop, return aggregated members.
-        if (!$cb && \class_exists(EventLoop::class, false)) {
+        if (!$cb && $this->inCoroutineMode()) {
             $collected = [];
             $cursor = '0';
             do {
@@ -3705,12 +3737,17 @@ class Client
      * loaded modules (ReJSON, search, …) but LOAD / UNLOAD return errors.
      *
      * A trailing callable is taken as the callback by the dispatcher.
+     * A trailing null is treated as "no callback", so moduleList() can
+     * forward its `$cb = null` default without sending an extra argument.
      *
-     * @param  mixed ...$args [verb, ...args, optional callable]
+     * @param  mixed ...$args [verb, ...args, optional callable or trailing null]
      * @return mixed
      */
     public function module(...$args)
     {
+        if (!empty($args) && \end($args) === null) {
+            \array_pop($args);
+        }
         return $this->dispatcher('MODULE ', $args);
     }
 

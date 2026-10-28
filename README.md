@@ -7,8 +7,6 @@ Asynchronous Redis client for PHP, built on Workerman.
 [![License](https://poser.pugx.org/workerman/redis/license)](LICENSE)
 [![PHP Version](https://img.shields.io/packagist/php-v/workerman/redis.svg)](https://php.net)
 [![CI](https://github.com/detain/redis/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/redis/actions/workflows/ci.yml)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/1860b96ba19b45b695b7724524f01dfa)](https://app.codacy.com/gh/detain/redis/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-[![Codacy Coverage](https://app.codacy.com/project/badge/Coverage/1860b96ba19b45b695b7724524f01dfa)](https://app.codacy.com/gh/detain/redis/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
 [![codecov](https://codecov.io/gh/detain/redis/graph/badge.svg?token=ntRuLnxa2V)](https://codecov.io/gh/detain/redis)  
 
 
@@ -612,9 +610,7 @@ pull request to `master` (and on demand via `workflow_dispatch`):
   guard and run only on the 8.1/8.2/8.3 legs. The single
   `php=8.3 && backend=dragonfly` leg additionally collects merged line coverage
   with **PCOV** (via `composer test:coverage`) and uploads a Clover report to
-  **[Codecov](https://codecov.io/gh/detain/redis)** and
-  **[Codacy](https://app.codacy.com/gh/detain/redis/dashboard)** (a dedicated
-  `codacy-coverage-reporter` job consumes the artifact). The coverage floor gate
+  **[Codecov](https://codecov.io/gh/detain/redis)**. The coverage floor gate
   fails the run below the minimum (see *Coverage* above).
 - Composer downloads are cached per PHP version to keep runs fast.
 

@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 # Force any JS action still declaring `using: node20` (e.g. the artifact,
-# codecov, setup-php, codacy actions) to run on Node 24, silencing the
+# codecov, setup-php actions) to run on Node 24, silencing the
 # "Node.js 20 actions are deprecated" runner warnings. checkout/cache are
 # additionally bumped to their Node-24-native majors below.
 env:
@@ -165,22 +165,3 @@ jobs:
       - name: Stop the engine
         if: always()
         run: docker rm -f redis-engine || true
-
-  codacy-coverage-reporter:
-    name: codacy-coverage-reporter
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-clover
-          path: .
-
-      - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@v1.3.0
-        with:
-          api-token: ${{ secrets.CODACY_API_TOKEN }}
-          coverage-reports: coverage.xml
