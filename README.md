@@ -6,15 +6,8 @@ Asynchronous Redis client for PHP, built on Workerman.
 [![Total Downloads](https://poser.pugx.org/workerman/redis/downloads)](https://packagist.org/packages/workerman/redis)
 [![License](https://poser.pugx.org/workerman/redis/license)](LICENSE)
 [![PHP Version](https://img.shields.io/packagist/php-v/workerman/redis.svg)](https://php.net)
-[![CI](https://github.com/detain/redis/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/redis/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/detain/redis/graph/badge.svg?token=ntRuLnxa2V)](https://codecov.io/gh/detain/redis)  
-
-
-| ![Sunburst](https://codecov.io/gh/detain/redis/graphs/sunburst.svg?token=ntRuLnxa2V) *Sunburst*   | ![Grid](https://codecov.io/gh/detain/redis/graphs/tree.svg?token=ntRuLnxa2V) *Grid* | ![Icicle](https://codecov.io/gh/detain/redis/graphs/icicle.svg?token=ntRuLnxa2V) *Icicle* |
-|------|------|------|
-| <sub>The inner-most circle is the entire project, moving away from the center are folders then, finally, a single file. The size and color of each slice is representing the number of statements and the coverage, respectively.</sub> | <sub>Each block represents a single file in the project. The size and color of each block is represented by the number of statements and the coverage, respectively.</sub> | <sub>The top section represents the entire project. Proceeding with folders and finally individual files. The size and color of each slice is representing the number of statements and the coverage, respectively.</sub> |
-
-
+[![CI](https://github.com/workerman-php/redis/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/workerman-php/redis/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/workerman-php/redis/graph/badge.svg)](https://codecov.io/gh/workerman-php/redis)
 
 Wire-compatible with both Redis and [Dragonfly](https://www.dragonflydb.io/). Supports two execution modes:
 
@@ -610,7 +603,7 @@ pull request to `master` (and on demand via `workflow_dispatch`):
   guard and run only on the 8.1/8.2/8.3 legs. The single
   `php=8.3 && backend=dragonfly` leg additionally collects merged line coverage
   with **PCOV** (via `composer test:coverage`) and uploads a Clover report to
-  **[Codecov](https://codecov.io/gh/detain/redis)**. The coverage floor gate
+  **[Codecov](https://codecov.io/gh/workerman-php/redis)**. The coverage floor gate
   fails the run below the minimum (see *Coverage* above).
 - Composer downloads are cached per PHP version to keep runs fast.
 

@@ -532,7 +532,7 @@ class Client
     /**
      * @param string $command
      * @param array  $prefix
-     * @param array  $streams
+     * @param mixed  $streams
      * @param int    $count
      * @param mixed  $block
      * @return array
