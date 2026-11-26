@@ -899,7 +899,12 @@ class Client
      * Check both active streams and commands queued before the first reply.
      * Explicit Pub/Sub operations may share the same stream.
      */
-    protected function streamActiveOrPending($allowPubSub = false)
+    protected function streamActiveOrPending()
+    {
+        return $this->hasStreamingCommand(false);
+    }
+
+    private function hasStreamingCommand($allowPubSub)
     {
         if ($this->_monitoring || ($this->_subscribe && (!$allowPubSub || !$this->hasManagedSubscription()))) {
             return true;
@@ -951,7 +956,7 @@ class Client
 
     protected function addSubscription($verb, $names, $cb)
     {
-        if ($this->streamActiveOrPending(true)) {
+        if ($this->hasStreamingCommand(true)) {
             throw new Exception("$verb: the connection already has an active or pending incompatible stream.");
         }
         $this->queueSubscriptionCommand($verb, [$names], $cb);
@@ -1133,6 +1138,9 @@ class Client
         $entry = $key === null ? null : $this->_queue[$key];
         if ($key !== null) {
             unset($this->_queue[$key]);
+            if (!$this->_queue) {
+                $this->_queue = [];
+            }
         }
         $this->_subscriptionCommandKey = null;
         $this->_subscriptionAcks = 0;

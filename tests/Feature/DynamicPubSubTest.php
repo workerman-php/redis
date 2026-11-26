@@ -64,6 +64,37 @@ PHP
         ], $result);
     }
 
+    public function test_reconnect_restores_only_the_subscriptions_that_remain(): void
+    {
+        $result = runInWorker(<<<'PHP'
+            $publisher = new Workerman\Redis\Client(getenv('REDIS_URL'));
+            $received = [];
+            $redis->subscribe('pest:reconnect:channel', function ($channel) use (&$received) {
+                $received[] = $channel;
+            });
+            $redis->pSubscribe('pest:reconnect:*', function ($pattern, $channel, $message) use (&$received) {
+                $received[] = [$pattern, $channel, $message];
+            });
+            $redis->unsubscribe();
+            \Workerman\Timer::add(0.3, function () use ($redis) {
+                $redis->closeConnection();
+                $redis->connect();
+            }, [], false);
+            \Workerman\Timer::add(0.6, function () use ($publisher) {
+                $publisher->publish('pest:reconnect:channel', 'after reconnect');
+            }, [], false);
+            \Workerman\Timer::add(0.9, function () use ($redis, $emit, &$received) {
+                $redis->pUnsubscribe();
+                $redis->ping(function ($pong) use ($emit, &$received) {
+                    $emit([$received, $pong]);
+                });
+            }, [], false);
+PHP
+        );
+
+        $this->assertSame([[['pest:reconnect:*', 'pest:reconnect:channel', 'after reconnect']], 'PONG'], $result);
+    }
+
     public function test_queued_unsubscribe_waits_for_subscribe_and_frees_the_connection(): void
     {
         $result = runInWorker(<<<'PHP'
